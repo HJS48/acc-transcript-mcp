@@ -21,7 +21,7 @@ console.error('[LOAD] Express app created');
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'User-Agent'],
   credentials: true
 }));
 app.use(express.json());
@@ -266,8 +266,11 @@ app.post('/mcp', async (req, res) => {
   console.error(`[MCP] Timestamp: ${new Date().toISOString()}`);
   console.error(`[MCP] Method: ${method}`);
   console.error(`[MCP] Request ID: ${requestId}`);
+  console.error(`[MCP] User-Agent: ${req.headers['user-agent'] || 'none'}`);
+  console.error(`[MCP] Content-Type: ${req.headers['content-type'] || 'none'}`);
+  console.error(`[MCP] Accept: ${req.headers['accept'] || 'none'}`);
   console.error(`[MCP] Body: ${JSON.stringify(req.body, null, 2)}`);
-  console.error(`[MCP] Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  console.error(`[MCP] All Headers: ${JSON.stringify(req.headers, null, 2)}`);
 
   // Check if MCP server is ready
   if (!mcpServer) {
@@ -434,6 +437,33 @@ app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
 });
 
 console.error('[LOAD] All routes registered, ready to listen...');
+
+// Global error handler - catch JSON parse errors and other issues
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[ERROR] Global error handler caught:', err);
+  console.error('[ERROR] Error type:', err.type);
+  console.error('[ERROR] Error message:', err.message);
+
+  // For MCP endpoint, return JSON-RPC error format
+  if (req.path === '/mcp' || req.path.startsWith('/mcp/')) {
+    const requestId = req.body?.id || 'unknown';
+    return res.status(err.status || 500).json({
+      jsonrpc: '2.0',
+      id: requestId,
+      error: {
+        code: err.status === 400 ? -32700 : -32603, // -32700 = Parse error, -32603 = Internal error
+        message: err.type === 'entity.parse.failed' ? 'Invalid JSON in request body' : 'Internal server error',
+        data: process.env.NODE_ENV === 'development' ? err.message : undefined
+      }
+    });
+  }
+
+  // For other endpoints, return standard JSON error
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    status: err.status || 500
+  });
+});
 
 // For direct MCP stdio connections (only if not running as HTTP server)
 if (process.argv.includes('--stdio')) {

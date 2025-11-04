@@ -26,10 +26,49 @@ app.use(cors({
 }));
 app.use(express.json());
 
-console.error('[LOAD] Middleware configured, creating MCP server...');
+console.error('[LOAD] Middleware configured');
 
-// Create MCP server instance (used for both HTTP and stdio)
-const mcpServer = new Server(
+// Add IMMEDIATE health checks (before any heavy initialization)
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', service: 'ACC Transcript MCP', version: '1.0.0' });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'ACC Transcript MCP' });
+});
+
+console.error('[LOAD] Health routes added');
+
+// START LISTENING IMMEDIATELY (before MCP initialization)
+const PORT = parseInt(process.env.PORT || '3400', 10);
+const HOST = '0.0.0.0';
+
+console.error(`[LOAD] Starting server on ${HOST}:${PORT} IMMEDIATELY...`);
+
+const server = app.listen(PORT, HOST, () => {
+  console.error(`[SERVER] ✅ LISTENING on ${HOST}:${PORT} - Railway can now connect!`);
+  console.error(`[SERVER] Now initializing MCP server in background...`);
+
+  // Initialize MCP AFTER server is listening
+  initializeMCP().catch(err => {
+    console.error(`[SERVER] ❌ MCP initialization failed:`, err);
+  });
+});
+
+server.on('error', (error: any) => {
+  console.error(`[SERVER] ❌ Listen failed:`, error);
+  process.exit(1);
+});
+
+// MCP Server variable (initialized later)
+let mcpServer: Server | null = null;
+
+// Initialize MCP server AFTER HTTP server is listening
+async function initializeMCP() {
+  console.error('[MCP] Creating MCP server instance...');
+
+  // Create MCP server instance (used for both HTTP and stdio)
+  mcpServer = new Server(
   {
     name: 'acc-transcript-server',
     version: '1.0.0',
@@ -203,25 +242,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-console.error('[LOAD] Tool handlers registered, setting up routes...');
+  console.error('[MCP] ✅ MCP server fully initialized and ready!');
+}
 
-// Root endpoint for Railway health check
-app.get('/', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'ACC Transcript MCP',
-    version: '1.0.0',
-    endpoints: {
-      health: '/health',
-      mcp: '/mcp'
-    }
-  });
-});
-
-// Health check endpoint (no auth required)
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'ACC Transcript MCP' });
-});
+console.error('[LOAD] Setting up remaining routes...');
 
 // OAuth discovery endpoint (keep for future OAuth upgrade)
 app.get('/mcp/.well-known/oauth-authorization-server', (req, res) => {
@@ -245,6 +269,19 @@ app.post('/mcp', async (req, res) => {
   console.error(`[MCP] Body: ${JSON.stringify(req.body, null, 2)}`);
   console.error(`[MCP] Headers: ${JSON.stringify(req.headers, null, 2)}`);
 
+  // Check if MCP server is ready
+  if (!mcpServer) {
+    console.error(`[MCP] Server not yet initialized for request ${requestId}`);
+    return res.status(503).json({
+      jsonrpc: '2.0',
+      id: requestId,
+      error: {
+        code: -32000,
+        message: 'MCP server is still initializing, please try again in a moment'
+      }
+    });
+  }
+
   try {
     // Create a new transport for each request (prevents request ID collisions)
     const transport = new StreamableHTTPServerTransport({
@@ -265,7 +302,7 @@ app.post('/mcp', async (req, res) => {
 
     // Connect the MCP server to this transport and handle the request
     console.error(`[MCP] Connecting transport for request ${requestId}...`);
-    await mcpServer.connect(transport);
+    await mcpServer!.connect(transport);
 
     console.error(`[MCP] Handling request ${requestId}...`);
     await transport.handleRequest(req, res, req.body);
@@ -398,39 +435,17 @@ app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
 
 console.error('[LOAD] All routes registered, ready to listen...');
 
-// Start HTTP server
-console.error(`[STARTUP] ========== Server Initialization ==========`);
-console.error(`[STARTUP] Environment PORT: ${process.env.PORT || 'not set'}`);
-console.error(`[STARTUP] Node ENV: ${process.env.NODE_ENV || 'not set'}`);
-
-const PORT = parseInt(process.env.PORT || '3400', 10);
-const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
-
-console.error(`[STARTUP] Calling app.listen()...`);
-
-const server = app.listen(PORT, HOST, () => {
-  const address = server.address();
-  const actualPort = typeof address === 'object' && address ? address.port : PORT;
-
-  console.error(`[STARTUP] ========== Server Started ==========`);
-  console.error(`🚀 MCP Server running on http://${HOST}:${actualPort}`);
-  console.error(`📍 Health check: http://${HOST}:${actualPort}/health`);
-  console.error(`🔐 Auth required for /mcp/tools/* endpoints`);
-  console.error(`📝 Test auth with: curl -H "Authorization: Bearer acc-demo-key-001" http://localhost:${actualPort}/mcp/me`);
-  console.error(`✅ Server ready to accept connections from Railway`);
-  console.error(`[STARTUP] Listening on ${typeof address === 'object' ? JSON.stringify(address) : address}`);
-});
-
-server.on('error', (error: any) => {
-  console.error(`[STARTUP] ========== SERVER ERROR ==========`);
-  console.error(`[STARTUP] Failed to start server:`, error);
-  console.error(`[STARTUP] Error code: ${error.code}`);
-  console.error(`[STARTUP] Port: ${PORT}`);
-  process.exit(1);
-});
-
-// For direct MCP stdio connections
+// For direct MCP stdio connections (only if not running as HTTP server)
 if (process.argv.includes('--stdio')) {
-  const transport = new StdioServerTransport();
-  mcpServer.connect(transport);
+  console.error('[STDIO] Starting stdio MCP server...');
+
+  // Wait for MCP initialization
+  const waitForMCP = setInterval(() => {
+    if (mcpServer) {
+      clearInterval(waitForMCP);
+      const transport = new StdioServerTransport();
+      mcpServer.connect(transport);
+      console.error('[STDIO] MCP stdio server connected');
+    }
+  }, 100);
 }

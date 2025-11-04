@@ -9,9 +9,15 @@ import { validateApiKey, canAccessClient } from './auth.js';
 import { SearchTranscriptsArgs, GetTranscriptDetailsArgs, ListRecentCallsArgs } from './types.js';
 import dotenv from 'dotenv';
 
+console.error('[LOAD] Module loading started');
+
 dotenv.config();
 
+console.error('[LOAD] dotenv configured');
+
 const app = express();
+
+console.error('[LOAD] Express app created');
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -19,6 +25,8 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+console.error('[LOAD] Middleware configured, creating MCP server...');
 
 // Create MCP server instance (used for both HTTP and stdio)
 const mcpServer = new Server(
@@ -32,6 +40,8 @@ const mcpServer = new Server(
     },
   }
 );
+
+console.error('[LOAD] MCP server created, registering tools...');
 
 // Register tool list handler
 mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -192,6 +202,8 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new Error(`Unknown tool: ${name}`);
   }
 });
+
+console.error('[LOAD] Tool handlers registered, setting up routes...');
 
 // Root endpoint for Railway health check
 app.get('/', (req, res) => {
@@ -384,6 +396,8 @@ app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
   }
 });
 
+console.error('[LOAD] All routes registered, ready to listen...');
+
 // Start HTTP server
 console.error(`[STARTUP] ========== Server Initialization ==========`);
 console.error(`[STARTUP] Environment PORT: ${process.env.PORT || 'not set'}`);
@@ -392,7 +406,7 @@ console.error(`[STARTUP] Node ENV: ${process.env.NODE_ENV || 'not set'}`);
 const PORT = parseInt(process.env.PORT || '3400', 10);
 const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
 
-console.error(`[STARTUP] Attempting to bind to ${HOST}:${PORT}...`);
+console.error(`[STARTUP] Calling app.listen()...`);
 
 const server = app.listen(PORT, HOST, () => {
   const address = server.address();

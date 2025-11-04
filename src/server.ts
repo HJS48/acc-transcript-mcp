@@ -224,25 +224,17 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     case 'listRecentCalls': {
-      const listArgs = args as ListRecentCallsArgs | undefined;
-      const limit = listArgs?.limit || 10;
+      const listArgs = (args as any) ?? {};
+      const limit = Math.max(1, Math.min(100, Number(listArgs.limit) || 10));
       const recent = getMockTranscripts().slice(0, limit);
 
-      console.error(`[TOOL] Limit: ${limit}`);
-      console.error(`[TOOL] Returning ${recent.length} recent calls`);
+      console.error('[TOOL] listRecentCalls limit=', limit, ' returning=', recent.length);
 
-      const response = {
+      return {
         content: [
-          {
-            type: 'text',
-            text: JSON.stringify(recent, null, 2),
-          },
-        ],
+          { type: 'text', text: JSON.stringify(recent, null, 2) }
+        ]
       };
-
-      console.error(`[TOOL] Response content length: ${response.content[0].text.length} chars`);
-
-      return response;
     }
 
     default:

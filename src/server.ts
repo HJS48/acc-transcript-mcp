@@ -193,6 +193,19 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Root endpoint for Railway health check
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'ACC Transcript MCP',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      mcp: '/mcp'
+    }
+  });
+});
+
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ACC Transcript MCP' });
@@ -372,12 +385,15 @@ app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
 });
 
 // Start HTTP server
-const PORT = process.env.PORT || 3400;
-app.listen(PORT, () => {
-  console.error(`🚀 MCP Server running on http://localhost:${PORT}`);
-  console.error(`📍 Health check: http://localhost:${PORT}/health`);
+const PORT = parseInt(process.env.PORT || '3400', 10);
+const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
+
+app.listen(PORT, HOST, () => {
+  console.error(`🚀 MCP Server running on http://${HOST}:${PORT}`);
+  console.error(`📍 Health check: http://${HOST}:${PORT}/health`);
   console.error(`🔐 Auth required for /mcp/tools/* endpoints`);
   console.error(`📝 Test auth with: curl -H "Authorization: Bearer acc-demo-key-001" http://localhost:${PORT}/mcp/me`);
+  console.error(`✅ Server ready to accept connections from Railway`);
 });
 
 // For direct MCP stdio connections

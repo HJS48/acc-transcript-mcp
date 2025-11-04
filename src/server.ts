@@ -37,6 +37,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ACC Transcript MCP' });
 });
 
+app.get('/mcp/ready', (req, res) => {
+  res.json({
+    ready: mcpReady,
+    mcpServerExists: !!mcpServer,
+    message: mcpReady ? 'MCP server ready' : 'MCP server still initializing'
+  });
+});
+
 console.error('[LOAD] Health routes added');
 
 // START LISTENING IMMEDIATELY (before MCP initialization)
@@ -62,6 +70,7 @@ server.on('error', (error: any) => {
 
 // MCP Server variable (initialized later)
 let mcpServer: Server | null = null;
+let mcpReady = false; // Set to true after all handlers are registered
 
 // Initialize MCP server AFTER HTTP server is listening
 async function initializeMCP() {
@@ -243,6 +252,8 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
   console.error('[MCP] ✅ MCP server fully initialized and ready!');
+  mcpReady = true;
+  console.error('[MCP] ✅ All handlers registered - accepting requests!');
 }
 
 console.error('[LOAD] Setting up remaining routes...');
@@ -273,14 +284,14 @@ app.post('/mcp', async (req, res) => {
   console.error(`[MCP] All Headers: ${JSON.stringify(req.headers, null, 2)}`);
 
   // Check if MCP server is ready
-  if (!mcpServer) {
-    console.error(`[MCP] Server not yet initialized for request ${requestId}`);
+  if (!mcpServer || !mcpReady) {
+    console.error(`[MCP] Server not yet ready for request ${requestId} (mcpServer: ${!!mcpServer}, mcpReady: ${mcpReady})`);
     return res.status(503).json({
       jsonrpc: '2.0',
       id: requestId,
       error: {
         code: -32000,
-        message: 'MCP server is still initializing, please try again in a moment'
+        message: 'MCP server is still registering handlers, please try again in a moment'
       }
     });
   }

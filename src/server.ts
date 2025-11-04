@@ -149,6 +149,20 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: 'echo',
+        description: 'Simple echo test - returns your input text immediately',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              description: 'Text to echo back',
+              default: 'Hello from MCP!',
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -236,6 +250,22 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [
           { type: 'json', json: recent }
+        ]
+      };
+    }
+
+    case 'echo': {
+      const echoArgs = (args as any) ?? {};
+      const message = echoArgs.message || 'Hello from MCP!';
+
+      console.error('[TOOL] echo called with message:', message);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Echo: ${message}`
+          }
         ]
       };
     }

@@ -265,6 +265,15 @@ app.post('/mcp', async (req, res) => {
   const requestId = req.body?.id || 'unknown';
   const method = req.body?.method || 'unknown';
 
+  // WORKAROUND: Normalize Accept header for clients that only want JSON
+  // The SDK requires both application/json and text/event-stream even when
+  // enableJsonResponse: true means we'll only ever return JSON
+  const acceptHeader = req.headers.accept;
+  if (acceptHeader && acceptHeader.includes('application/json') && !acceptHeader.includes('text/event-stream')) {
+    req.headers.accept = 'application/json, text/event-stream';
+    console.error(`[MCP] Normalized Accept header from "${acceptHeader}" to "${req.headers.accept}"`);
+  }
+
   console.error(`[MCP] ========== Incoming Request ==========`);
   console.error(`[MCP] Timestamp: ${new Date().toISOString()}`);
   console.error(`[MCP] Method: ${method}`);

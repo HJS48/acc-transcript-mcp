@@ -180,47 +180,50 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
         console.error(`[TOOL] After client filter: ${results.length} results`);
       }
 
-      const response = {
+      console.error(`[TOOL] Returning ${results.length} transcripts as structured JSON`);
+
+      return {
         content: [
           {
-            type: 'text',
-            text: JSON.stringify(results, null, 2),
+            type: 'json',
+            json: results,
           },
         ],
       };
-
-      console.error(`[TOOL] Response content length: ${response.content[0].text.length} chars`);
-      console.error(`[TOOL] Returning ${results.length} transcripts`);
-
-      return response;
     }
 
     case 'getTranscriptDetails': {
       const detailArgs = args as GetTranscriptDetailsArgs | undefined;
-      let transcript = null;
 
       console.error(`[TOOL] Searching for transcript ID: ${detailArgs?.transcriptId}`);
 
-      if (detailArgs?.transcriptId) {
-        transcript = getMockTranscripts().find(
-          t => t.id === detailArgs.transcriptId
-        );
-      }
+      const transcript = detailArgs?.transcriptId
+        ? getMockTranscripts().find(t => t.id === detailArgs.transcriptId)
+        : null;
 
       console.error(`[TOOL] Transcript found: ${transcript ? 'YES' : 'NO'}`);
 
-      const response = {
+      if (!transcript) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Transcript not found',
+            },
+          ],
+        };
+      }
+
+      console.error(`[TOOL] Returning transcript as structured JSON`);
+
+      return {
         content: [
           {
-            type: 'text',
-            text: transcript ? JSON.stringify(transcript, null, 2) : 'Transcript not found',
+            type: 'json',
+            json: transcript,
           },
         ],
       };
-
-      console.error(`[TOOL] Response content length: ${response.content[0].text.length} chars`);
-
-      return response;
     }
 
     case 'listRecentCalls': {
@@ -228,11 +231,11 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       const limit = Math.max(1, Math.min(100, Number(listArgs.limit) || 10));
       const recent = getMockTranscripts().slice(0, limit);
 
-      console.error('[TOOL] listRecentCalls limit=', limit, ' returning=', recent.length);
+      console.error('[TOOL] listRecentCalls limit=', limit, ' returning=', recent.length, 'as structured JSON');
 
       return {
         content: [
-          { type: 'text', text: JSON.stringify(recent, null, 2) }
+          { type: 'json', json: recent }
         ]
       };
     }

@@ -1,0 +1,281 @@
+// OpenAPI 3.1 specification for ChatGPT Custom Connector
+export const openapiSpec = {
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ACC Transcript Search API",
+    "description": "Search and retrieve call transcripts for ACC Finance clients",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://acc-transcript-mcp-production.up.railway.app"
+    }
+  ],
+  "paths": {
+    "/mcp/tools/searchTranscripts": {
+      "post": {
+        "summary": "Search call transcripts",
+        "description": "Search through client call transcripts using keywords or phrases. Returns matching transcripts with context.",
+        "operationId": "searchTranscripts",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Search query for transcript content"
+                  },
+                  "clientFilter": {
+                    "type": "string",
+                    "description": "Optional: Filter results by specific client name"
+                  },
+                  "dateFrom": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Optional: Start date for filtering (YYYY-MM-DD)"
+                  },
+                  "dateTo": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Optional: End date for filtering (YYYY-MM-DD)"
+                  }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "tool": {
+                      "type": "string"
+                    },
+                    "resultCount": {
+                      "type": "integer"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Transcript"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Access denied to specified client"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/mcp/tools/getTranscriptDetails": {
+      "post": {
+        "summary": "Get transcript details",
+        "description": "Retrieve full details of a specific transcript by ID",
+        "operationId": "getTranscriptDetails",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "transcriptId": {
+                    "type": "string",
+                    "description": "ID of the transcript to retrieve"
+                  }
+                },
+                "required": ["transcriptId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcript details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "tool": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/Transcript"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Transcript not found"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Access denied"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/mcp/tools/listRecentCalls": {
+      "post": {
+        "summary": "List recent calls",
+        "description": "Get a list of recent client calls you have access to",
+        "operationId": "listRecentCalls",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer",
+                    "description": "Number of recent calls to return (default: 10)",
+                    "default": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of recent calls",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "tool": {
+                      "type": "string"
+                    },
+                    "resultCount": {
+                      "type": "integer"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Transcript"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Transcript": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique transcript identifier"
+          },
+          "clientName": {
+            "type": "string",
+            "description": "Name of the client"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of the call"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of call participants"
+          },
+          "content": {
+            "type": "string",
+            "description": "Transcript content summary"
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "speaker": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Individual transcript chunks with timestamps"
+          },
+          "actionItems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Action items extracted from the call"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Enter your ACC Finance API key"
+      }
+    }
+  }
+};

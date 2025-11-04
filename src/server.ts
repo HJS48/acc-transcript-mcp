@@ -11,27 +11,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-app.use(cors({
-  origin: '*', // Allow all origins for now (ChatGPT, testing, etc.)
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ACC Transcript MCP' });
-});
-
-// OpenAPI spec endpoint (no auth required for ChatGPT discovery)
-app.get('/openapi.json', (req, res) => {
-  res.sendFile('openapi.json', { root: '.' });
-});
-
-// Alternative: Serve OpenAPI spec at /.well-known/openapi.json (ChatGPT standard)
-app.get('/.well-known/openapi.json', (req, res) => {
-  res.sendFile('openapi.json', { root: '.' });
 });
 
 // OAuth discovery endpoint (keep for future OAuth upgrade)

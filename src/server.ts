@@ -99,22 +99,30 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
 mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  console.error(`[TOOL] ========== Tool Execution ==========`);
+  console.error(`[TOOL] Tool Name: ${name}`);
+  console.error(`[TOOL] Arguments: ${JSON.stringify(args, null, 2)}`);
+
   switch (name) {
     case 'searchTranscripts': {
       const searchArgs = args as SearchTranscriptsArgs | undefined;
       let results = getMockTranscripts();
 
+      console.error(`[TOOL] Initial results count: ${results.length}`);
+
       if (searchArgs?.query) {
         results = results.filter(t =>
           t.content.toLowerCase().includes(searchArgs.query.toLowerCase())
         );
+        console.error(`[TOOL] After query filter: ${results.length} results`);
       }
 
       if (searchArgs?.clientFilter) {
         results = results.filter(t => t.clientName === searchArgs.clientFilter);
+        console.error(`[TOOL] After client filter: ${results.length} results`);
       }
 
-      return {
+      const response = {
         content: [
           {
             type: 'text',
@@ -122,11 +130,18 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
+
+      console.error(`[TOOL] Response content length: ${response.content[0].text.length} chars`);
+      console.error(`[TOOL] Returning ${results.length} transcripts`);
+
+      return response;
     }
 
     case 'getTranscriptDetails': {
       const detailArgs = args as GetTranscriptDetailsArgs | undefined;
       let transcript = null;
+
+      console.error(`[TOOL] Searching for transcript ID: ${detailArgs?.transcriptId}`);
 
       if (detailArgs?.transcriptId) {
         transcript = getMockTranscripts().find(
@@ -134,7 +149,9 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
       }
 
-      return {
+      console.error(`[TOOL] Transcript found: ${transcript ? 'YES' : 'NO'}`);
+
+      const response = {
         content: [
           {
             type: 'text',
@@ -142,6 +159,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
+
+      console.error(`[TOOL] Response content length: ${response.content[0].text.length} chars`);
+
+      return response;
     }
 
     case 'listRecentCalls': {
@@ -149,7 +170,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       const limit = listArgs?.limit || 10;
       const recent = getMockTranscripts().slice(0, limit);
 
-      return {
+      console.error(`[TOOL] Limit: ${limit}`);
+      console.error(`[TOOL] Returning ${recent.length} recent calls`);
+
+      const response = {
         content: [
           {
             type: 'text',
@@ -157,9 +181,14 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
+
+      console.error(`[TOOL] Response content length: ${response.content[0].text.length} chars`);
+
+      return response;
     }
 
     default:
+      console.error(`[TOOL] ERROR: Unknown tool requested: ${name}`);
       throw new Error(`Unknown tool: ${name}`);
   }
 });
@@ -181,6 +210,16 @@ app.get('/mcp/.well-known/oauth-authorization-server', (req, res) => {
 
 // MCP endpoint - JSON-RPC 2.0 over HTTP using StreamableHTTPServerTransport
 app.post('/mcp', async (req, res) => {
+  const requestId = req.body?.id || 'unknown';
+  const method = req.body?.method || 'unknown';
+
+  console.error(`[MCP] ========== Incoming Request ==========`);
+  console.error(`[MCP] Timestamp: ${new Date().toISOString()}`);
+  console.error(`[MCP] Method: ${method}`);
+  console.error(`[MCP] Request ID: ${requestId}`);
+  console.error(`[MCP] Body: ${JSON.stringify(req.body, null, 2)}`);
+  console.error(`[MCP] Headers: ${JSON.stringify(req.headers, null, 2)}`);
+
   try {
     // Create a new transport for each request (prevents request ID collisions)
     const transport = new StreamableHTTPServerTransport({
@@ -190,17 +229,30 @@ app.post('/mcp', async (req, res) => {
 
     // Close transport when response finishes
     res.on('close', () => {
+      console.error(`[MCP] Response closed for request ${requestId}`);
       transport.close();
     });
 
+    res.on('finish', () => {
+      console.error(`[MCP] Response finished for request ${requestId}`);
+      console.error(`[MCP] Status: ${res.statusCode}`);
+    });
+
     // Connect the MCP server to this transport and handle the request
+    console.error(`[MCP] Connecting transport for request ${requestId}...`);
     await mcpServer.connect(transport);
+
+    console.error(`[MCP] Handling request ${requestId}...`);
     await transport.handleRequest(req, res, req.body);
+
+    console.error(`[MCP] Request ${requestId} completed successfully`);
   } catch (error: any) {
-    console.error('[MCP] Error handling request:', error);
+    console.error(`[MCP] ========== ERROR ==========`);
+    console.error(`[MCP] Error handling request ${requestId}:`, error);
+    console.error(`[MCP] Stack:`, error.stack);
     res.status(500).json({
       jsonrpc: '2.0',
-      id: req.body?.id || null,
+      id: requestId,
       error: {
         code: -32603,
         message: 'Internal server error',

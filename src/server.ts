@@ -385,15 +385,34 @@ app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
 });
 
 // Start HTTP server
+console.error(`[STARTUP] ========== Server Initialization ==========`);
+console.error(`[STARTUP] Environment PORT: ${process.env.PORT || 'not set'}`);
+console.error(`[STARTUP] Node ENV: ${process.env.NODE_ENV || 'not set'}`);
+
 const PORT = parseInt(process.env.PORT || '3400', 10);
 const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
 
-app.listen(PORT, HOST, () => {
-  console.error(`🚀 MCP Server running on http://${HOST}:${PORT}`);
-  console.error(`📍 Health check: http://${HOST}:${PORT}/health`);
+console.error(`[STARTUP] Attempting to bind to ${HOST}:${PORT}...`);
+
+const server = app.listen(PORT, HOST, () => {
+  const address = server.address();
+  const actualPort = typeof address === 'object' && address ? address.port : PORT;
+
+  console.error(`[STARTUP] ========== Server Started ==========`);
+  console.error(`🚀 MCP Server running on http://${HOST}:${actualPort}`);
+  console.error(`📍 Health check: http://${HOST}:${actualPort}/health`);
   console.error(`🔐 Auth required for /mcp/tools/* endpoints`);
-  console.error(`📝 Test auth with: curl -H "Authorization: Bearer acc-demo-key-001" http://localhost:${PORT}/mcp/me`);
+  console.error(`📝 Test auth with: curl -H "Authorization: Bearer acc-demo-key-001" http://localhost:${actualPort}/mcp/me`);
   console.error(`✅ Server ready to accept connections from Railway`);
+  console.error(`[STARTUP] Listening on ${typeof address === 'object' ? JSON.stringify(address) : address}`);
+});
+
+server.on('error', (error: any) => {
+  console.error(`[STARTUP] ========== SERVER ERROR ==========`);
+  console.error(`[STARTUP] Failed to start server:`, error);
+  console.error(`[STARTUP] Error code: ${error.code}`);
+  console.error(`[STARTUP] Port: ${PORT}`);
+  process.exit(1);
 });
 
 // For direct MCP stdio connections

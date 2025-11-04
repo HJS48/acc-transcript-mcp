@@ -29,6 +29,172 @@ app.get('/mcp/.well-known/oauth-authorization-server', (req, res) => {
   });
 });
 
+// MCP discovery endpoints (no auth required for ChatGPT to discover tools)
+app.get('/mcp', (req, res) => {
+  res.json({
+    name: 'acc-transcript-server',
+    version: '1.0.0',
+    capabilities: {
+      tools: {}
+    }
+  });
+});
+
+// Allow tool listing without auth for discovery
+app.post('/mcp', (req, res) => {
+  // Check if it's a tools/list request
+  if (req.body?.method === 'tools/list') {
+    res.json({
+      tools: [
+        {
+          name: 'searchTranscripts',
+          description: 'Search call transcripts',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string' }
+            },
+            required: ['query']
+          }
+        },
+        {
+          name: 'getTranscriptDetails',
+          description: 'Get transcript details',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              transcriptId: { type: 'string' }
+            },
+            required: ['transcriptId']
+          }
+        },
+        {
+          name: 'listRecentCalls',
+          description: 'List recent calls',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number' }
+            }
+          }
+        }
+      ]
+    });
+  } else {
+    // For actual tool calls, require auth
+    res.status(401).json({ error: 'Authentication required for tool execution' });
+  }
+});
+
+// Test endpoint to verify auth is working
+app.get('/mcp/me', validateApiKey, (req, res) => {
+  res.json({
+    authenticated: true,
+    user: req.user
+  });
+});
+
+// HTTP endpoints with authentication
+app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
+  try {
+    const { toolName } = req.params;
+    const user = req.user!;
+    
+    console.log(`[TOOL] ${user.email} calling ${toolName}`);
+    
+    switch (toolName) {
+      case 'searchTranscripts': {
+        let results = getMockTranscripts();
+        
+        // Filter by user's allowed clients
+        if (!user.allowedClients.includes('*')) {
+          results = results.filter(t => 
+            canAccessClient(user, t.clientName)
+          );
+        }
+        
+        // Apply search query
+        if (req.body.query) {
+          results = results.filter(t => 
+            t.content.toLowerCase().includes(req.body.query.toLowerCase())
+          );
+        }
+        
+        // Apply client filter if specified
+        if (req.body.clientFilter) {
+          if (!canAccessClient(user, req.body.clientFilter)) {
+            return res.status(403).json({ 
+              error: 'Access denied',
+              message: `You don't have access to ${req.body.clientFilter}` 
+            });
+          }
+          results = results.filter(t => t.clientName === req.body.clientFilter);
+        }
+        
+        res.json({
+          success: true,
+          tool: toolName,
+          resultCount: results.length,
+          results: results
+        });
+        break;
+      }
+      
+      case 'getTranscriptDetails': {
+        const transcript = getMockTranscripts().find(
+          t => t.id === req.body.transcriptId
+        );
+        
+        if (!transcript) {
+          return res.status(404).json({ error: 'Transcript not found' });
+        }
+        
+        // Check user has access to this client
+        if (!canAccessClient(user, transcript.clientName)) {
+          return res.status(403).json({ 
+            error: 'Access denied',
+            message: `You don't have access to ${transcript.clientName}` 
+          });
+        }
+        
+        res.json({
+          success: true,
+          tool: toolName,
+          result: transcript
+        });
+        break;
+      }
+      
+      case 'listRecentCalls': {
+        let recent = getMockTranscripts();
+        
+        // Filter by user's allowed clients
+        if (!user.allowedClients.includes('*')) {
+          recent = recent.filter(t => 
+            canAccessClient(user, t.clientName)
+          );
+        }
+        
+        recent = recent.slice(0, req.body.limit || 10);
+        
+        res.json({
+          success: true,
+          tool: toolName,
+          resultCount: recent.length,
+          results: recent
+        });
+        break;
+      }
+      
+      default:
+        res.status(404).json({ error: `Unknown tool: ${toolName}` });
+    }
+  } catch (error: any) {
+    console.error(`[ERROR] Tool execution failed:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Create MCP server
 const mcpServer = new Server(
   {
@@ -171,115 +337,6 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
-});
-
-// HTTP endpoints with authentication
-app.post('/mcp/tools/:toolName', validateApiKey, async (req, res) => {
-  try {
-    const { toolName } = req.params;
-    const user = req.user!;
-    
-    console.log(`[TOOL] ${user.email} calling ${toolName}`);
-    
-    switch (toolName) {
-      case 'searchTranscripts': {
-        let results = getMockTranscripts();
-        
-        // Filter by user's allowed clients
-        if (!user.allowedClients.includes('*')) {
-          results = results.filter(t => 
-            canAccessClient(user, t.clientName)
-          );
-        }
-        
-        // Apply search query
-        if (req.body.query) {
-          results = results.filter(t => 
-            t.content.toLowerCase().includes(req.body.query.toLowerCase())
-          );
-        }
-        
-        // Apply client filter if specified
-        if (req.body.clientFilter) {
-          if (!canAccessClient(user, req.body.clientFilter)) {
-            return res.status(403).json({ 
-              error: 'Access denied',
-              message: `You don't have access to ${req.body.clientFilter}` 
-            });
-          }
-          results = results.filter(t => t.clientName === req.body.clientFilter);
-        }
-        
-        res.json({
-          success: true,
-          tool: toolName,
-          resultCount: results.length,
-          results: results
-        });
-        break;
-      }
-      
-      case 'getTranscriptDetails': {
-        const transcript = getMockTranscripts().find(
-          t => t.id === req.body.transcriptId
-        );
-        
-        if (!transcript) {
-          return res.status(404).json({ error: 'Transcript not found' });
-        }
-        
-        // Check user has access to this client
-        if (!canAccessClient(user, transcript.clientName)) {
-          return res.status(403).json({ 
-            error: 'Access denied',
-            message: `You don't have access to ${transcript.clientName}` 
-          });
-        }
-        
-        res.json({
-          success: true,
-          tool: toolName,
-          result: transcript
-        });
-        break;
-      }
-      
-      case 'listRecentCalls': {
-        let recent = getMockTranscripts();
-        
-        // Filter by user's allowed clients
-        if (!user.allowedClients.includes('*')) {
-          recent = recent.filter(t => 
-            canAccessClient(user, t.clientName)
-          );
-        }
-        
-        recent = recent.slice(0, req.body.limit || 10);
-        
-        res.json({
-          success: true,
-          tool: toolName,
-          resultCount: recent.length,
-          results: recent
-        });
-        break;
-      }
-      
-      default:
-        res.status(404).json({ error: `Unknown tool: ${toolName}` });
-    }
-  } catch (error: any) {
-    console.error(`[ERROR] Tool execution failed:`, error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Test endpoint to verify auth is working
-app.get('/mcp/me', validateApiKey, (req, res) => {
-  res.json({
-    authenticated: true,
-    user: req.user
-  });
 });
 
 // Start HTTP server

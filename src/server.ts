@@ -6,7 +6,6 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { getMockTranscripts } from './mock-data.js';
 import { validateApiKey, canAccessClient } from './auth.js';
 import { SearchTranscriptsArgs, GetTranscriptDetailsArgs, ListRecentCallsArgs } from './types.js';
-import { openapiSpec } from './openapi-spec.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -27,12 +26,12 @@ app.get('/health', (req, res) => {
 
 // OpenAPI spec endpoint (no auth required for ChatGPT discovery)
 app.get('/openapi.json', (req, res) => {
-  res.json(openapiSpec);
+  res.sendFile('openapi.json', { root: '.' });
 });
 
 // Alternative: Serve OpenAPI spec at /.well-known/openapi.json (ChatGPT standard)
 app.get('/.well-known/openapi.json', (req, res) => {
-  res.json(openapiSpec);
+  res.sendFile('openapi.json', { root: '.' });
 });
 
 // OAuth discovery endpoint (keep for future OAuth upgrade)

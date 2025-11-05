@@ -283,13 +283,12 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 console.error('[LOAD] Setting up remaining routes...');
 
-// OAuth discovery endpoint (keep for future OAuth upgrade)
+// OAuth discovery endpoint disabled - return 404 to indicate no OAuth
+// This tells Claude to connect without authentication
 app.get('/mcp/.well-known/oauth-authorization-server', (req, res) => {
-  res.json({
-    issuer: process.env.BASE_URL || 'https://localhost:3400',
-    token_endpoint: 'Use Bearer token with API key',
-    authentication: 'Bearer token',
-    note: 'Using API key authentication for MVP'
+  res.status(404).json({
+    error: 'OAuth not configured',
+    note: 'This server does not require authentication for MCP connections'
   });
 });
 
